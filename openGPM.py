@@ -19,7 +19,6 @@ import h5py  # @UnresolvedImport
 from scipy import spatial  # @UnresolvedImport
 import glob
 import os
-from tkinter.constants import SW
 from matplotlib import pyplot as plt
 
 
@@ -190,6 +189,7 @@ def readGPM(filename):
 
 
 if __name__ == '__main__':
+    tic_tot = time.time()
     mainDir = '/scratch/erikj'
     mainGpmDir = '%s/Data/GPM' %mainDir
     mainClsDir = '%s/Data/CloudSat/2B-FLXHR-LIDAR.v05.02' %mainDir
@@ -243,7 +243,9 @@ if __name__ == '__main__':
         print('way')
     print(time.time() - tic)
     
+    tic = time.time()
     tree = spatial.KDTree(list(zip(gpmdata['lats'].ravel(), gpmdata['lons'].ravel())))
+    print(time.time() - tic)
     sw = None
     tb = None
     for flxfile in flxfiles:
@@ -282,21 +284,36 @@ if __name__ == '__main__':
         #     test[0,:] = latsrav
         #     test[1,:] = lonsrav
             #: https://docs.scipy.org/doc/scipy-0.19.1/reference/generated/scipy.spatial.KDTree.query.html#scipy.spatial.KDTree.query
-            tic = time.time()
             minkded, minkdep = tree.query(lid_latlon)
             minkdea = np.unravel_index(minkdep, gpmdata['lats'].shape)
             if tb is None:
                 tb = gpmdata['Tb_d'][ti, minkdea[0], minkdea[1]]
             else:
                 tb = np.concatenate((tb, gpmdata['Tb_d'][ti, minkdea[0], minkdea[1]]))
-            print(time.time() - tic)
-
-    useInd = ~((tb == -9999) | (sw[:, 40] == -9.99))
-
+    
+    lev = 24
+    useInd = ~((tb == -9999) | (sw[:, lev] == -9.99) | (sw[:, lev] == 0.))
+    print('Nr of SW cases = %d' %useInd.sum())
     fig = plt.figure()
-    ax = fig.add_subplot(111)
-    H, xedges, yedges, im = ax.hist2d(tb[useInd], sw[:,40][useInd])#, range=rang, bins=bins, norm=LogNorm(), vmin=1., vmax=1e4, cmap=cmap)
+    ax = fig.add_subplot(1,2,1)
+    H, xedges, yedges, im = ax.hist2d(tb[useInd], sw[:,lev][useInd], bins=[50, 50])#, range= [[220, 300], [0., 0.05]])#, range=rang, bins=bins, norm=LogNorm(), vmin=1., vmax=1e4, cmap=cmap)
+    ax.set_xlabel('GPM - Tb [K]')
+    ax.set_ylabel('Cloudsat - SW [K/day]')
+    ax.set_title('Height = %d m, lev = %d' %(height[useInd, lev][0], lev))
+    
+    
+    useInd = ~((tb == -9999) | (lw[:, lev] == -9.99) | (lw[:, lev] == 0.))
+    print('Nr of LW cases = %d' %useInd.sum())
+    ax = fig.add_subplot(1,2,2)
+    H, xedges, yedges, im = ax.hist2d(tb[useInd], lw[:,lev][useInd], bins=[50, 50], range= [[220, 300], [-1., 1.]])#, range= [[220, 300], [0., 0.05]])#, range=rang, bins=bins, norm=LogNorm(), vmin=1., vmax=1e4, cmap=cmap)
+    ax.set_xlabel('GPM - Tb [K]')
+    ax.set_ylabel('Cloudsat - LW [K/day]')
+    ax.set_title('Height = %d m, lev = %d' %(height[useInd, lev][0], lev))
+    
+    figname = 'test'
+    fig.savefig(figname + '.png')
     fig.show()
+    print(time.time() - tic_tot)
     pdb.set_trace()
 #             minkded, minkdep = tree.query(pt)
     
