@@ -194,71 +194,90 @@ if __name__ == '__main__':
     mainGpmDir = '%s/Data/GPM' %mainDir
     mainClsDir = '%s/Data/CloudSat/2B-FLXHR-LIDAR.v05.02' %mainDir
     
+    #: Some variables
     year = 2008
     month = 1
     day = 2
     hour_start = 1
-    timediff = 10 * 60
+    timediff = 15 * 60
+    
+    #: Datetime object
     datum = datetime(year, month, day, hour_start)
+    #: Incase the pm imediff puts the cloudsat on the other side of midnight
+    #: Get the cloudsat from day before and after.
+    #: Date minus 1 day. 
     datum_m1 = datum - timedelta(1)
+    #: Date plus 1 day
     datum_p1 = datum + timedelta(1)
     yday = datum.timetuple().tm_yday
+    #: Dir where to find GPM data
     gpmDir = '%s/%d/%03d' %(mainGpmDir, year, yday)
+    #: Filename of GPM data
     gpmname = '%s/merg_%d%02d%02d%02d_4km-pixel.nc4' %(gpmDir, year, month, day, hour_start)
+    #: Dir with cloudsat
     clsDir = '%s/%d/%d_%02d_%02d' %(mainClsDir, year, year, month, day)
     clsDir_m1 = '%s/%d/%d_%02d_%02d' %(mainClsDir, datum_m1.year, datum_m1.year, datum_m1.month, datum_m1.day)
     clsDir_p1 = '%s/%d/%d_%02d_%02d' %(mainClsDir, datum_p1.year, datum_p1.year, datum_p1.month, datum_p1.day)
+    #: All cloudsat files
     clsglob = glob.glob('%s/*.h5' %clsDir)
     clsglob = clsglob + glob.glob('%s/*.h5' %clsDir_m1)
     clsglob = clsglob + glob.glob('%s/*.h5' %clsDir_p1)
     clsglob.sort()
-
+    
+    #: Read the GPM file
     gpmdata = readGPM(gpmname)
     tic = time.time()
+    #: Lets find the corresponding cloudsat files
     flxfiles = []
     for f in clsglob:
+        #: Date from cloudsat filename
         fb = os.path.basename(f)
         y = fb[0:4]
         yd = fb[4:7]
         h = fb[7:9]
         m = fb[9:11]
         time_fn = datetime.strptime('%s %s %s %s' %(y, yd, h, m), '%Y %j %H %M')
+        #: Get the difference between date and filename
         tsmin = datum - time_fn
         tsmax = time_fn - datum
         #: First control from file name
+        #: Make a ruf selection so we do not need to spend time to open to many files
         if ((tsmin.days*24*3600 + tsmin.seconds) > (timediff + 2 * 3600)) or \
             ((tsmax.days*24*3600 + tsmax.seconds) > (2 * timediff + 0.5 * 3600)):
-#             print('hmm')
             continue
-        #: Read file
+        #: Read cloudsat file
         liddata = readFLXHRLidar(f)
         #: Second control from time stamps
+        #: Lets lock inside the file and remove (continu) if there is no data to be used.
         if ((np.abs(liddata['sec1970'] - gpmdata['time_d'][0]*24*3600) <= timediff).sum() == 0) and \
             ((np.abs(liddata['sec1970'] - gpmdata['time_d'][1]*24*3600) <= timediff).sum() == 0):
-#             print('ha')
-#             pdb.set_trace()
             continue
-        
+        #: Append files to be used
         flxfiles.append(f)
         print('way')
     print(time.time() - tic)
     
     tic = time.time()
+    #: Create KDTree form gpm lats/lons
     tree = spatial.KDTree(list(zip(gpmdata['lats'].ravel(), gpmdata['lons'].ravel())))
     print(time.time() - tic)
     sw = None
     tb = None
     for flxfile in flxfiles:
+        #: Read the cloudsat data
         liddata = readFLXHRLidar(flxfile)
 #         lid_latlon = np.zeros([2, len(liddata['latitude'])])
 #         lid_latlon[0, :] = liddata['latitude']
 #         lid_latlon[1, :] = liddata['longitude']
+        #: There are 2 time stamps in each gpm file
         for ti in [0, 1]:
-            
+            #: Bothe cloudsat and gpm has time defined as time from 1970. Cloudsat in sec and gpm in days
             timeInd = np.abs(liddata['sec1970'] - gpmdata['time_d'][ti]*24*3600) <= timediff
+            #: Different cloudsat files to different gpm time stamps
             if timeInd.sum() == 0:
                 continue
             if sw is None:
+                #: First file
                 sw = liddata['QR'][0,timeInd,:]
                 lw = liddata['QR'][1,timeInd,:]
                 height = liddata['Height'][timeInd,:]
@@ -266,9 +285,11 @@ if __name__ == '__main__':
                 sw = np.concatenate((sw, liddata['QR'][0,timeInd,:]))
                 lw = np.concatenate((lw, liddata['QR'][1,timeInd,:]))
                 height = np.concatenate((height, liddata['Height'][timeInd,:]))
+            #: cloudsat lat/lon needs to be in the format lists in list, [ [lat, lon], [lat, lon], ...]
             lid_latlon = []
             for i in range(len(liddata['latitude'][timeInd])):
                 lid_latlon.append([liddata['latitude'][timeInd][i],liddata['longitude'][timeInd][i]])
+
 #             lid_latlon = [ [liddata['latitude'][timeInd][i],liddata['longitude'][timeInd][i]] for i in range(len(liddata['latitude'][timeInd]))]
 #             pt = [[6, 30]]
 #             minp = []
@@ -276,13 +297,14 @@ if __name__ == '__main__':
 #             for i in range(len(lid_latlon)):
 #                 minp.append(np.argmin(np.sqrt(((gpmdata['lats'] - lid_latlon[i][0])**2) + ((gpmdata['lons'] - lid_latlon[i][1])**2))))
 #                 mina.append(np.unravel_index(minp[i], gpmdata['lats'].shape))
-        
-        #     latsrav = lats.ravel()
-        #     lonsrav = lons.ravel()
-        #     
-        #     test=np.zeros([2, len(latsrav)])
-        #     test[0,:] = latsrav
-        #     test[1,:] = lonsrav
+#             latsrav = lats.ravel()
+#             lonsrav = lons.ravel()
+#              
+#             test=np.zeros([2, len(latsrav)])
+#             test[0,:] = latsrav
+#             test[1,:] = lonsrav
+            
+            #: Find the nearest neighburg
             #: https://docs.scipy.org/doc/scipy-0.19.1/reference/generated/scipy.spatial.KDTree.query.html#scipy.spatial.KDTree.query
             minkded, minkdep = tree.query(lid_latlon)
             minkdea = np.unravel_index(minkdep, gpmdata['lats'].shape)
@@ -290,6 +312,44 @@ if __name__ == '__main__':
                 tb = gpmdata['Tb_d'][ti, minkdea[0], minkdea[1]]
             else:
                 tb = np.concatenate((tb, gpmdata['Tb_d'][ti, minkdea[0], minkdea[1]]))
+    
+    #: Averaging
+    #: heighest h in m - lowest h in m / 240 m. Add one to be sure to cover the whole wanted height
+    tic = time.time()
+    heighH = 20000
+    lowH = 10000
+    height_lev = int((heighH - lowH) / 240.) + 1
+    heights = np.arange(lowH, heighH + 240, 240)
+    SW = np.zeros([heights.shape[0], tb.shape[0]])
+    LW = np.zeros([heights.shape[0], tb.shape[0]])
+    
+    sumSW = np.zeros((heights.shape))
+    numSW = np.zeros((heights.shape))
+    sumLW = np.zeros((heights.shape))
+    numLW = np.zeros((heights.shape))
+    t = 0
+    for i in range(len(tb)):
+        if (tb[i] == -9999):
+            continue
+        t = t + 1
+        for j in range(heights.shape[0]):
+            hi = (height[i, :] >= heights[j]) & (height[i, :] < (heights[j] + 240))
+            s = sw[i, hi]
+            l = lw[i, hi]
+            if s != -9.99:
+                sumSW[j] = sumSW[j] + s
+                numSW[j] = numSW[j] + 1
+            
+            if s != -9.99:
+                sumLW[j] = sumLW[j] + l
+                numLW[j] = numLW[j] + 1
+            pdb.set_trace()
+    print(time.time() - tic)
+    avH = [] * height_lev
+    
+    
+    
+    
     
     lev = 24
     useInd = ~((tb == -9999) | (sw[:, lev] == -9.99) | (sw[:, lev] == 0.))
