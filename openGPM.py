@@ -320,30 +320,54 @@ if __name__ == '__main__':
     lowH = 10000
     height_lev = int((heighH - lowH) / 240.) + 1
     heights = np.arange(lowH, heighH + 240, 240)
-    SW = np.zeros([heights.shape[0], tb.shape[0]])
-    LW = np.zeros([heights.shape[0], tb.shape[0]])
-    
-    sumSW = np.zeros((heights.shape))
-    numSW = np.zeros((heights.shape))
-    sumLW = np.zeros((heights.shape))
-    numLW = np.zeros((heights.shape))
+    SW = np.zeros([tb.shape[0], heights.shape[0]])
+    LW = np.zeros([tb.shape[0], heights.shape[0]])
+#     tb_new = np.zeros([tb.shape[0]])
     t = 0
     for i in range(len(tb)):
+        if i == 0:
+            tb_new = [tb[i]]
+#             tb_new[0] = tb[0]
+            sumSW = np.zeros((heights.shape))
+            numSW = np.zeros((heights.shape))
+            sumLW = np.zeros((heights.shape))
+            numLW = np.zeros((heights.shape))
+        else:
+            if minkdep[i] != minkdep[i-1]:
+#                 tb_new[t] = tb[i]
+                tb_new.append(tb[i])
+                SW[t, :] = sumSW / numSW
+                LW[t, :] = sumLW / numLW
+            
+                t = t + 1
+                
+                sumSW = np.zeros((heights.shape))
+                numSW = np.zeros((heights.shape))
+                sumLW = np.zeros((heights.shape))
+                numLW = np.zeros((heights.shape))
+                
+                
         if (tb[i] == -9999):
             continue
-        t = t + 1
+        
         for j in range(heights.shape[0]):
             hi = (height[i, :] >= heights[j]) & (height[i, :] < (heights[j] + 240))
             s = sw[i, hi]
             l = lw[i, hi]
+#             try:
             if s != -9.99:
-                sumSW[j] = sumSW[j] + s
-                numSW[j] = numSW[j] + 1
+                sumSW[j] = sumSW[j] + s.sum()
+                numSW[j] = numSW[j] + len(s)
             
             if s != -9.99:
-                sumLW[j] = sumLW[j] + l
-                numLW[j] = numLW[j] + 1
-            pdb.set_trace()
+                sumLW[j] = sumLW[j] + l.sum()
+                numLW[j] = numLW[j] + len(s)
+#             except:
+#                 pdb.set_trace()
+    
+    tb_new.append(tb[i])
+    SW[t, :] = sumSW / numSW
+    LW[t, :] = sumLW / numLW
     print(time.time() - tic)
     avH = [] * height_lev
     
