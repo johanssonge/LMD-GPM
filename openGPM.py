@@ -190,7 +190,7 @@ def readGPM(filename):
 
 if __name__ == '__main__':
     tic_tot = time.time()
-    mainDir = '/scratch/erikj'
+    mainDir = '/scratchu/ejohansson' #'/scratch/erikj'
     mainGpmDir = '%s/Data/GPM' %mainDir
     mainClsDir = '%s/Data/CloudSat/2B-FLXHR-LIDAR.v05.02' %mainDir
     tempDir = '%s/OpenGPM/TempFiles' %mainDir
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     year = 2008
     month = 1
     day = 2
-    hour_start = 1
+    hour_start = 8
     timediff = 15 * 60
     nrfiles = 2
     tempnames = []
