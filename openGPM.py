@@ -18,9 +18,13 @@ import netCDF4 as nc  # @UnresolvedImport
 import h5py  # @UnresolvedImport
 from scipy import spatial  # @UnresolvedImport
 import glob
-import os
-from matplotlib import pyplot as plt
 import sys
+import os
+
+
+import matplotlib  # @UnresolvedImport
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt  # @UnresolvedImport
 
 
 
@@ -321,6 +325,24 @@ def loadTemps(tempnames):
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-l","--lat-bound", type=int, default=91,  
+                        help="Latitude Boundary. Default=90")
+#     parser.add_argument("-c1","--clim-max", type=int, default=500, 
+#                         help="Max clim. Default=500")
+#     parser.add_argument("-fn","--method-name", type=str, default='All', 
+#                         help="name of the method used. Default=All")
+#     parser.add_argument("-fm","--method-flag", action="store_true", default=False, 
+#                         help="Do not show figure. Default=True (i.e. show figure)")
+    parser.add_argument("-s","--show", action="store_false", default=True, 
+                        help="Do not show figure. Default=True (i.e. show figure)")
+    
+    
+    
+    args = parser.parse_args()
+    show = args.show
+    
     tic_tot = time.time()
     homedir = os.getenv("HOME") 
     mainDir = '%s/Scratch' %homedir    #'/scratch/erikj' #'/scratchu/ejohansson' #'/scratch/erikj'
@@ -339,17 +361,18 @@ if __name__ == '__main__':
     day = 2
     hour_start = 8
     timediff = 15 * 60
-    nrfiles = 10
+    nrfiles = 500
     tempnames = []
     heighH = 20000
     lowH = 10000
-    latbound = 30
+    latbound = args.lat_bound
     loadtf = True
     height_lev = int((heighH - lowH) / 240.) + 1
     heights = np.arange(lowH, heighH + 240, 240)
     #: Datetime object
     datumST = datetime(year, month, day, hour_start)
     for i in range(nrfiles):
+        print('File %i of %i' %(i, nrfiles))
         datum = datumST + timedelta(hours=(i))
         #: GPM        
         yday = datum.timetuple().tm_yday
@@ -357,7 +380,11 @@ if __name__ == '__main__':
         gpmDir = '%s/%d/%03d' %(mainGpmDir, year, yday)
         #: Filename of GPM data
         gpmname = '%s/merg_%d%02d%02d%02d_4km-pixel.nc4' %(gpmDir, datum.year, datum.month, datum.day, datum.hour)
-        tempname = '%s/%s' %(tempDir, os.path.basename(gpmname).replace('.nc4', ''))
+        if latbound > 90:
+            latbound_tn = 90
+        else:
+            latbound_tn = latbound
+        tempname = '%s/%s_lat-%i' %(tempDir, os.path.basename(gpmname).replace('.nc4', ''), latbound_tn)
         tempnames.append(tempname)
         if (os.path.isfile(tempname + '.npy')) and (loadtf == True):
             continue
@@ -369,7 +396,7 @@ if __name__ == '__main__':
         #: Date plus 1 day
         datum_p1 = datum + timedelta(1)
         #: Dir with cloudsat
-        flxDir = '%s/%d/%d_%02d_%02d' %(mainFlxDir, year, year, month, day)
+        flxDir = '%s/%d/%d_%02d_%02d' %(mainFlxDir, datum.year, datum.year, datum.month, datum.day)
         flxDir_m1 = '%s/%d/%d_%02d_%02d' %(mainFlxDir, datum_m1.year, datum_m1.year, datum_m1.month, datum_m1.day)
         flxDir_p1 = '%s/%d/%d_%02d_%02d' %(mainFlxDir, datum_p1.year, datum_p1.year, datum_p1.month, datum_p1.day)
         #: All cloudsat files
@@ -424,6 +451,9 @@ if __name__ == '__main__':
         print(time.time() - tic)
         if len(flxfiles) == 0:
             print('No matching CloudSat')
+            #: Remove the tempname from tempnames
+            if (tempname == np.asarray(tempnames)).any():
+                tempnames.pop(np.where(tempname == np.asarray(tempnames))[0][0])
             continue
         tic = time.time()
         #: Create KDTree form gpm lats/lons
@@ -752,10 +782,12 @@ if __name__ == '__main__':
                 ax.set_ylabel('Cloudsat - LW [K/day]')
 #                 ax.set_title('Height = %d m, lev = %d' %(heights[lev], lev))
     
-                figname = '%s/histo_%s_%s_%d' %(plotDir, cl, dn, lev)
+                figname = '%s/histo_%s_%s_%d_l-%d' %(plotDir, cl, dn, lev, latbound_tn)
                 fig.savefig(figname + '.png')
-                fig.show()
-    pdb.set_trace()
+                if show:
+                    fig.show()
+    if show:
+        pdb.set_trace()
     sys.exit()
     fig = plt.figure()
     ax = fig.add_subplot(1,2,1)
